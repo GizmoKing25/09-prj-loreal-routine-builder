@@ -1,540 +1,396 @@
-// L'Oréal Routine Builder - Main JavaScript File
-// This file contains all the functionality for the beauty advisor app
-
-// Sample product data (in a real app, this would come from a database or API)
-const productsData = [
-  {
-    id: 1,
-    name: "Revitalift Anti-Wrinkle Cream",
-    category: "moisturizer",
-    description:
-      "Advanced anti-aging moisturizer with Pro-Retinol to reduce wrinkles and firm skin.",
-    image: "https://via.placeholder.com/80x80/ff003b/white?text=RAC",
-    price: "$24.99",
-  },
-  {
-    id: 2,
-    name: "Pure Clay Detox Mask",
-    category: "cleanser",
-    description:
-      "Deep-cleansing clay mask with charcoal to purify pores and remove impurities.",
-    image: "https://via.placeholder.com/80x80/ff003b/white?text=PCM",
-    price: "$12.99",
-  },
-  {
-    id: 3,
-    name: "Elvive Total Repair Shampoo",
-    category: "haircare",
-    description:
-      "Repairing shampoo with protein to strengthen damaged hair and restore shine.",
-    image: "https://via.placeholder.com/80x80/ff003b/white?text=ETS",
-    price: "$6.99",
-  },
-  {
-    id: 4,
-    name: "Rouge Signature Lipstick",
-    category: "makeup",
-    description:
-      "Lightweight liquid lipstick with intense color and all-day comfort.",
-    image: "https://via.placeholder.com/80x80/ff003b/white?text=RSL",
-    price: "$15.99",
-  },
-  {
-    id: 5,
-    name: "Excellence Hair Color",
-    category: "hair color",
-    description:
-      "Triple-care formula hair color that covers grays while protecting hair.",
-    image: "https://via.placeholder.com/80x80/ff003b/white?text=EHC",
-    price: "$9.99",
-  },
-];
-
-// Global variables to store app state
-let selectedProducts = [];
-let conversationHistory = [];
-
-// DOM elements
+ /* Get references to DOM elements */
 const categoryFilter = document.getElementById("categoryFilter");
 const productsContainer = document.getElementById("productsContainer");
-const selectedList = document.getElementById("selectedList");
-const generateButton = document.getElementById("generateRoutine");
-const chatWindow = document.getElementById("chatWindow");
 const chatForm = document.getElementById("chatForm");
-const chatInput = document.getElementById("chatInput");
+const chatWindow = document.getElementById("chatWindow");
+const selectedProductsList = document.getElementById("selectedProductsList");
+const rtlToggle = document.getElementById("rtlToggle");
+const descModalContainer = document.getElementById("descModalContainer");
+const clearAllBtn = document.getElementById("clearAllBtn");
 
-// Initialize the app
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("🚀 L'Oréal Routine Builder initialized");
+/* Show initial placeholder until user selects a category */
+productsContainer.innerHTML = `
+  <div class="placeholder-message">
+    Select a category to view products
+  </div>
+`;
 
-  // Load saved products from localStorage
-  loadSelectedProducts();
+// Store selected product IDs (persisted in localStorage)
+let selectedProductIds = [];
 
-  // Display all products
-  displayProducts(productsData);
+// Store chat history for conversation context
+let chatHistory = [];
 
-  // Update the selected products list
-  updateSelectedProductsList();
-
-  // Event listeners
-  categoryFilter.addEventListener("change", filterByCategory);
-  generateButton.addEventListener("click", handleGenerateRoutine);
-  chatForm.addEventListener("submit", handleChatSubmit);
-
-  // Add search functionality
-  addSearchBar();
-
-  // Show welcome message in chat
-  displayChatMessage(
-    "assistant",
-    "Welcome to your L'Oréal Beauty Advisor! 🌟\n\nSelect products above and click 'Generate Routine' or ask me any beauty questions!"
-  );
+/* RTL toggle support */
+rtlToggle.addEventListener("click", function () {
+  // Toggle RTL class on body
+  document.body.classList.toggle("rtl");
+  // Save preference in localStorage
+  if (document.body.classList.contains("rtl")) {
+    localStorage.setItem("rtlMode", "true");
+  } else {
+    localStorage.removeItem("rtlMode");
+  }
 });
 
-/* Function to display products on the page */
-function displayProducts(products) {
-  console.log(`📦 Showing ${products.length} products`);
-
-  // Clear any existing products
-  productsContainer.innerHTML = "";
-
-  // Create a card for each product
-  products.forEach((product) => {
-    // Create the main product card element
-    const productCard = document.createElement("div");
-    productCard.className = "product-card";
-    productCard.setAttribute("data-product-id", product.id);
-
-    // Check if this product is already selected
-    const isSelected = selectedProducts.some((p) => p.id === product.id);
-    if (isSelected) {
-      productCard.classList.add("selected");
-    }
-
-    // Create the HTML content for the card
-    productCard.innerHTML = `
-            <img src="${product.image}" alt="${product.name}">
-            <h3>${product.name}</h3>
-            <p class="price">${product.price}</p>
-            <div class="product-description" style="display: none;">
-                <p>${product.description}</p>
-            </div>
-            <button class="toggle-description" onclick="toggleDescription(${product.id})">
-                Show Details
-            </button>
-        `;
-
-    // Add click event to select/unselect product
-    productCard.addEventListener("click", function (event) {
-      // Don't select if user clicked the details button
-      if (!event.target.classList.contains("toggle-description")) {
-        toggleProductSelection(product);
-      }
-    });
-
-    // Add the card to the products container
-    productsContainer.appendChild(productCard);
-  });
+// On page load, restore RTL mode if set
+if (localStorage.getItem("rtlMode") === "true") {
+  document.body.classList.add("rtl");
 }
 
-/* Function to select or unselect a product */
-function toggleProductSelection(product) {
-  console.log(`🎯 Toggling selection for: ${product.name}`);
-
-  // Check if product is already in selected list
-  const existingIndex = selectedProducts.findIndex((p) => p.id === product.id);
-  const productCard = document.querySelector(
-    `[data-product-id="${product.id}"]`
+// Helper: Save/load selected products from localStorage
+function saveSelectedProducts() {
+  // Always save as strings
+  localStorage.setItem(
+    "selectedProductIds",
+    JSON.stringify(selectedProductIds.map(String))
   );
-
-  if (existingIndex >= 0) {
-    // Product is selected, so remove it
-    selectedProducts.splice(existingIndex, 1);
-    productCard.classList.remove("selected");
-    console.log("➖ Removed from selection");
-  } else {
-    // Product is not selected, so add it
-    selectedProducts.push(product);
-    productCard.classList.add("selected");
-    console.log("➕ Added to selection");
-  }
-
-  // Update the display and save to browser storage
-  updateSelectedProductsList();
-  saveSelectedProducts();
+}
+function loadSelectedProducts() {
+  const saved = localStorage.getItem("selectedProductIds");
+  if (saved) selectedProductIds = JSON.parse(saved).map(String);
 }
 
-/* Function to update the selected products list */
-function updateSelectedProductsList() {
-  console.log(`📝 Updating selected list: ${selectedProducts.length} products`);
-
-  // Clear the current list
-  selectedList.innerHTML = "";
-
-  // Add each selected product to the list
-  selectedProducts.forEach((product) => {
-    const selectedItem = document.createElement("div");
-    selectedItem.className = "selected-item";
-    selectedItem.innerHTML = `
-            ${product.name}
-            <button onclick="removeProduct(${product.id})" title="Remove product">×</button>
-        `;
-    selectedList.appendChild(selectedItem);
-  });
-
-  // Enable or disable the generate button based on selection
-  generateButton.disabled = selectedProducts.length === 0;
-}
-
-/* Function to remove a product from selection */
-function removeProduct(productId) {
-  console.log(`🗑️ Removing product with ID: ${productId}`);
-
-  // Remove from selected products array
-  selectedProducts = selectedProducts.filter((p) => p.id !== productId);
-
-  // Remove visual selection from product card
-  const productCard = document.querySelector(
-    `[data-product-id="${productId}"]`
-  );
-  if (productCard) {
-    productCard.classList.remove("selected");
-  }
-
-  // Update display and save
-  updateSelectedProductsList();
-  saveSelectedProducts();
-}
-
-/* Function to filter products by category */
-function filterByCategory() {
-  const category = categoryFilter.value;
-  const filteredProducts = category
-    ? productsData.filter((product) => product.category === category)
-    : productsData;
-
-  displayProducts(filteredProducts);
-}
-
-/* Function to show/hide product description */
-function toggleDescription(productId) {
-  console.log(`📖 Toggling description for product ID: ${productId}`);
-
-  const productCard = document.querySelector(
-    `[data-product-id="${productId}"]`
-  );
-  const description = productCard.querySelector(".product-description");
-  const button = productCard.querySelector(".toggle-description");
-
-  if (description.style.display === "none") {
-    description.style.display = "block";
-    button.textContent = "Hide Details";
-  } else {
-    description.style.display = "none";
-    button.textContent = "Show Details";
-  }
-}
-
-/* Function to generate routine */
-async function handleGenerateRoutine() {
-  console.log(`✨ Generating routine for ${selectedProducts.length} products`);
-
-  // Check if user has selected any products
-  if (selectedProducts.length === 0) {
-    displayChatMessage(
-      "assistant",
-      "Please select some products first to generate a routine! ✨"
-    );
-    return;
-  }
-
-  // Check if API key is set up
-  if (
-    !window.OPENAI_API_KEY ||
-    window.OPENAI_API_KEY === "your-openai-api-key-here"
-  ) {
-    displayChatMessage(
-      "assistant",
-      "❌ OpenAI API key not found!\n\nPlease:\n1. Open secrets.js file\n2. Replace 'your-openai-api-key-here' with your actual API key\n3. Save and refresh the page\n\nGet your key from: https://platform.openai.com/api-keys"
-    );
-    return;
-  }
-
-  // Show user's request in chat
-  const productNames = selectedProducts.map((p) => p.name).join(", ");
-  displayChatMessage("user", `Generate routine for: ${productNames}`);
-
-  // Show loading message
-  displayChatMessage("assistant", "Creating your personalized routine... ✨");
-
-  try {
-    // Create detailed prompt for OpenAI
-    const productDetails = selectedProducts
-      .map((p) => `${p.name} (${p.category}): ${p.description}`)
-      .join("\n\n");
-
-    const prompt = `Create a detailed beauty routine using these L'Oréal products:\n\n${productDetails}\n\nPlease provide:\n1. Step-by-step morning routine\n2. Step-by-step evening routine\n3. How to use each product effectively\n4. Tips for best results\n5. Application order and timing`;
-
-    // Call OpenAI API
-    const response = await callOpenAI(prompt);
-
-    // Remove loading message and show result
-    removeLastMessage();
-    displayChatMessage("assistant", response);
-
-    console.log("✅ Routine generated successfully");
-  } catch (error) {
-    console.error("❌ Error generating routine:", error);
-    removeLastMessage();
-    displayChatMessage(
-      "assistant",
-      `❌ Sorry, there was an error generating your routine.\n\nError: ${error.message}\n\nPlease check:\n• Your internet connection\n• Your API key is correct\n• You have credits in your OpenAI account`
-    );
-  }
-}
-
-/* Function to handle chat form submission */
-async function handleChatSubmit(event) {
-  event.preventDefault(); // Prevent form from refreshing page
-
-  const userMessage = chatInput.value.trim();
-  if (!userMessage) return; // Don't send empty messages
-
-  console.log(`💬 User message: ${userMessage}`);
-
-  // Display user's message
-  displayChatMessage("user", userMessage);
-
-  // Clear input field
-  chatInput.value = "";
-
-  // Check if API key is set up
-  if (
-    !window.OPENAI_API_KEY ||
-    window.OPENAI_API_KEY === "your-openai-api-key-here"
-  ) {
-    displayChatMessage(
-      "assistant",
-      "❌ API key not set up. Please check secrets.js file."
-    );
-    return;
-  }
-
-  // Show loading message
-  displayChatMessage("assistant", "Thinking... 💭");
-
-  try {
-    // Get AI response
-    const response = await callOpenAI(userMessage);
-
-    // Remove loading message and show response
-    removeLastMessage();
-    displayChatMessage("assistant", response);
-
-    console.log("✅ Chat response received");
-  } catch (error) {
-    console.error("❌ Chat error:", error);
-    removeLastMessage();
-    displayChatMessage(
-      "assistant",
-      `❌ Sorry, I had trouble processing your message.\n\nError: ${error.message}`
-    );
-  }
-}
-
-/* Function to call OpenAI API */
-async function callOpenAI(userMessage) {
-  console.log("🤖 Calling OpenAI API...");
-
-  // Prepare messages array for the API
-  // This includes system instructions and conversation history
-  const messages = [
-    {
-      role: "system",
-      content:
-        "You are a helpful L'Oréal beauty advisor. Provide detailed, practical beauty advice and create step-by-step routines. Be friendly and professional. Focus on skincare, haircare, makeup, and beauty routines.",
-    },
-    // Add recent conversation history for context
-    ...conversationHistory.slice(-10), // Keep last 10 messages
-    {
-      role: "user",
-      content: userMessage,
-    },
-  ];
-
-  // Make the API request
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${window.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o", // Use gpt-4o model as specified
-      messages: messages,
-      max_tokens: 1000,
-      temperature: 0.7,
-    }),
-  });
-
-  // Check if request was successful
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.status} - ${response.statusText}`);
-  }
-
-  // Parse the response
+/* Load product data from JSON file */
+async function loadProducts() {
+  const response = await fetch("products.json");
   const data = await response.json();
-
-  // Check if response has expected format
-  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-    throw new Error("Invalid response format from OpenAI");
-  }
-
-  console.log("✅ OpenAI API response received");
-  return data.choices[0].message.content;
+  return data.products;
 }
 
-/* Function to display messages in chat window */
-function displayChatMessage(sender, message) {
-  console.log(`💬 Adding message from: ${sender}`);
+/* Create HTML for displaying product cards */
+function displayProducts(products) {
+  productsContainer.innerHTML = products
+    .map(
+      (product) => `
+    <div class="product-card${
+      selectedProductIds.includes(String(product.id)) ? " selected" : ""
+    }" data-id="${product.id}">
+      <img src="${product.image}" alt="${product.name}">
+      <div class="product-info">
+        <h3>${product.name}</h3>
+        <p>${product.brand}</p>
+      </div>
+      <button class="desc-btn" title="Show description"><i class="fa fa-info"></i></button>
+      <div class="product-desc-overlay">
+        <div>${product.description}</div>
+        <button type="button" class="close-desc-btn">Close</button>
+      </div>
+    </div>
+  `
+    )
+    .join("");
 
-  // Create message element
-  const messageDiv = document.createElement("div");
-  messageDiv.className = `chat-message ${sender}`;
+  // Add click event to each card for selection and description
+  document.querySelectorAll(".product-card").forEach((card) => {
+    const id = card.getAttribute("data-id");
+    // Card click toggles selection
+    card.onclick = (e) => {
+      // Prevent toggling when clicking description button or overlay
+      if (
+        e.target.classList.contains("desc-btn") ||
+        e.target.classList.contains("close-desc-btn") ||
+        e.target.closest(".product-desc-overlay")
+      ) {
+        return;
+      }
+      toggleProductSelection(id, products);
+    };
+    // Description button shows overlay
+    card.querySelector(".desc-btn").onclick = (e) => {
+      e.stopPropagation();
+      card.classList.add("show-desc");
+    };
+    // Close button hides overlay
+    card.querySelector(".close-desc-btn").onclick = (e) => {
+      e.stopPropagation();
+      card.classList.remove("show-desc");
+    };
+  });
+}
 
-  // Format message (replace \n with <br> for line breaks)
-  const formattedMessage = message.replace(/\n/g, "<br>");
-
-  // Set message content
-  messageDiv.innerHTML = `
-        <strong>${sender === "user" ? "You" : "L'Oréal Advisor"}:</strong>
-        <div class="message-content">${formattedMessage}</div>
+// Render selected products in the container
+function renderSelectedProducts(products) {
+  selectedProductsList.innerHTML = "";
+  if (selectedProductIds.length === 0) {
+    selectedProductsList.innerHTML = `<div class="placeholder-message" style="padding:18px;">No products selected.</div>`;
+    clearAllBtn.style.display = "none";
+    return;
+  }
+  clearAllBtn.style.display = "inline-block";
+  selectedProductIds.forEach((id) => {
+    // Always compare as strings
+    const product = products.find((p) => String(p.id) === String(id));
+    if (!product) return;
+    const item = document.createElement("div");
+    item.className = "selected-product-item";
+    item.innerHTML = `
+      <img src="${product.image}" alt="${product.name}" />
+      <span style="flex:1;min-width:0;">${product.name}</span>
+      <button class="remove-btn" title="Remove" aria-label="Remove">&times;</button>
     `;
+    item.querySelector(".remove-btn").onclick = () => {
+      toggleProductSelection(String(product.id), products);
+    };
+    selectedProductsList.appendChild(item);
+  });
+}
 
-  // Add to chat window
-  chatWindow.appendChild(messageDiv);
+// Toggle product selection and update UI
+function toggleProductSelection(productId, products) {
+  // Always use string for productId
+  const idStr = String(productId);
+  const idx = selectedProductIds.indexOf(idStr);
+  if (idx === -1) {
+    selectedProductIds.push(idStr);
+  } else {
+    selectedProductIds.splice(idx, 1);
+  }
+  saveSelectedProducts();
+  displayProducts(products); // re-render grid to update border
+  renderSelectedProducts(products);
+}
 
-  // Scroll to bottom to show latest message
+// Use your Cloudflare Worker endpoint for all chatbot questions
+
+const WORKER_URL = "https://loreralchatbot.miguel-romero03.workers.dev/";
+
+// Helper: auto-link URLs in text
+function autoLink(text) {
+  // Regex to match URLs (http/https)
+  return text.replace(/(https?:\/\/[^\s]+)/g, function (url) {
+    return `<a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+  });
+}
+
+// Add event listener for Generate Routine button
+const generateRoutineBtn = document.getElementById("generateRoutine");
+generateRoutineBtn.addEventListener("click", async function () {
+  // Load all products
+  const products = await loadProducts();
+  // Get selected products as objects
+  const selectedProducts = selectedProductIds
+    .map((id) => products.find((p) => String(p.id) === String(id)))
+    .filter(Boolean);
+
+  // If no products selected, show a message in chat
+  if (selectedProducts.length === 0) {
+    chatWindow.innerHTML += `<div class="chat-message ai">Please select some products first!</div>`;
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return;
+  }
+
+  // Build a simple message for the AI
+  const productList = selectedProducts
+    .map((p, i) => `${i + 1}. ${p.name} (${p.brand})`)
+    .join("\n");
+  const routinePrompt = `I have selected these products:\n${productList}\n\nPlease create a skincare or haircare routine using only these products. Explain the order and how to use each one. Be clear and beginner-friendly.`;
+
+  // Add user's action to chat and chatHistory
+  chatWindow.innerHTML += `<div class="chat-message user">Generate a routine for my selected products.</div>`;
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+  chatHistory.push({ role: "user", content: routinePrompt });
+
+  // Show loading message
+  chatWindow.innerHTML += `<div class="chat-message ai">Thinking...</div>`;
   chatWindow.scrollTop = chatWindow.scrollHeight;
 
-  // Add to conversation history for context
-  conversationHistory.push({
-    role: sender === "user" ? "user" : "assistant",
-    content: message,
-  });
+  try {
+    // Send to Cloudflare Worker with full chatHistory
+    const response = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: chatHistory,
+        tools: ["browser"], // Request web context
+      }),
+    });
+    const data = await response.json();
 
-  // Keep only recent messages to avoid token limits
-  if (conversationHistory.length > 20) {
-    conversationHistory = conversationHistory.slice(-20);
-  }
-}
+    // Remove the loading message
+    const aiMsgs = chatWindow.querySelectorAll(".chat-message.ai");
+    if (aiMsgs.length > 0) {
+      aiMsgs[aiMsgs.length - 1].remove();
+    }
 
-/* Function to remove last message (for loading messages) */
-function removeLastMessage() {
-  const messages = chatWindow.querySelectorAll(".chat-message");
-  if (messages.length > 0) {
-    const lastMessage = messages[messages.length - 1];
-    const text = lastMessage.textContent;
+    // Show the AI's response and add to chatHistory
     if (
-      text.includes("Creating your personalized routine...") ||
-      text.includes("Thinking...")
+      data &&
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content
     ) {
-      lastMessage.remove();
+      let aiContent = autoLink(data.choices[0].message.content);
+      // If there are tool_calls or citations, show them
+      if (
+        data.choices[0].message.tool_calls &&
+        data.choices[0].message.tool_calls.length > 0
+      ) {
+        aiContent += '<div class="ai-citations"><strong>Sources:</strong><ul>';
+        data.choices[0].message.tool_calls.forEach((tc) => {
+          if (tc.function && tc.function.arguments) {
+            try {
+              const args = JSON.parse(tc.function.arguments);
+              if (args.url) {
+                aiContent += `<li><a href="${args.url}" target="_blank" rel="noopener">${args.url}</a></li>`;
+              }
+            } catch (e) {}
+          }
+        });
+        aiContent += "</ul></div>";
+      }
+      chatWindow.innerHTML += `<div class="chat-message ai">${aiContent}</div>`;
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+      chatHistory.push({
+        role: "assistant",
+        content: data.choices[0].message.content,
+      });
+    } else {
+      chatWindow.innerHTML += `<div class="chat-message ai">Sorry, I couldn't generate a routine. Please try again.</div>`;
+      chatWindow.scrollTop = chatWindow.scrollHeight;
     }
+  } catch (err) {
+    // Remove the loading message
+    const aiMsgs = chatWindow.querySelectorAll(".chat-message.ai");
+    if (aiMsgs.length > 0) {
+      aiMsgs[aiMsgs.length - 1].remove();
+    }
+    chatWindow.innerHTML += `<div class="chat-message ai">There was an error connecting to the AI. Please try again.</div>`;
+    chatWindow.scrollTop = chatWindow.scrollHeight;
   }
-}
+});
 
-/* Function to save selected products to browser storage */
-function saveSelectedProducts() {
-  try {
-    localStorage.setItem(
-      "lorealSelectedProducts",
-      JSON.stringify(selectedProducts)
+// Helper: filter products by category and search
+async function filterAndDisplayProducts() {
+  const products = await loadProducts();
+  const selectedCategory = categoryFilter.value;
+  const searchValue = productSearch.value.trim().toLowerCase();
+  let filtered = products;
+  if (selectedCategory) {
+    filtered = filtered.filter(
+      (product) => product.category === selectedCategory
     );
-    console.log("💾 Products saved to browser storage");
-  } catch (error) {
-    console.error("❌ Error saving products:", error);
   }
+  if (searchValue) {
+    filtered = filtered.filter(
+      (product) =>
+        product.name.toLowerCase().includes(searchValue) ||
+        product.brand.toLowerCase().includes(searchValue)
+    );
+  }
+  displayProducts(filtered);
+  renderSelectedProducts(filtered);
 }
 
-/* Function to load selected products from browser storage */
-function loadSelectedProducts() {
+// Listen for category changes
+categoryFilter.addEventListener("change", filterAndDisplayProducts);
+
+// Listen for product search input
+const productSearch = document.getElementById("productSearch");
+productSearch.addEventListener("input", filterAndDisplayProducts);
+
+/* Chat form submission handler - placeholder for OpenAI integration */
+chatForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  // Get the user's question
+  const userMessage = document.getElementById("userInput").value.trim();
+  if (!userMessage) return;
+
+  // Show user's message in the chat window
+  chatWindow.innerHTML += `<div class="chat-message user">${userMessage}</div>`;
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+  chatHistory.push({ role: "user", content: userMessage });
+
+  // Show loading message
+  chatWindow.innerHTML += `<div class="chat-message ai">Thinking...</div>`;
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
   try {
-    const saved = localStorage.getItem("lorealSelectedProducts");
-    if (saved) {
-      selectedProducts = JSON.parse(saved);
-      console.log(`📂 Loaded ${selectedProducts.length} saved products`);
+    // Send the full chatHistory to the Cloudflare Worker
+    const response = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: chatHistory,
+        tools: ["browser"], // Request web context
+      }),
+    });
+    const data = await response.json();
+
+    // Remove the loading message
+    const aiMsgs = chatWindow.querySelectorAll(".chat-message.ai");
+    if (aiMsgs.length > 0) {
+      aiMsgs[aiMsgs.length - 1].remove();
     }
-  } catch (error) {
-    console.error("❌ Error loading saved products:", error);
-    selectedProducts = [];
+
+    // Show the AI's response and add to chatHistory
+    if (
+      data &&
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content
+    ) {
+      let aiContent = autoLink(data.choices[0].message.content);
+      // If there are tool_calls or citations, show them
+      if (
+        data.choices[0].message.tool_calls &&
+        data.choices[0].message.tool_calls.length > 0
+      ) {
+        aiContent += '<div class="ai-citations"><strong>Sources:</strong><ul>';
+        data.choices[0].message.tool_calls.forEach((tc) => {
+          if (tc.function && tc.function.arguments) {
+            try {
+              const args = JSON.parse(tc.function.arguments);
+              if (args.url) {
+                aiContent += `<li><a href="${args.url}" target="_blank" rel="noopener">${args.url}</a></li>`;
+              }
+            } catch (e) {}
+          }
+        });
+        aiContent += "</ul></div>";
+      }
+      chatWindow.innerHTML += `<div class="chat-message ai">${aiContent}</div>`;
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+      chatHistory.push({
+        role: "assistant",
+        content: data.choices[0].message.content,
+      });
+    } else {
+      chatWindow.innerHTML += `<div class="chat-message ai">Sorry, I couldn't answer that. Please try again.</div>`;
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+  } catch (err) {
+    // Remove the loading message
+    const aiMsgs = chatWindow.querySelectorAll(".chat-message.ai");
+    if (aiMsgs.length > 0) {
+      aiMsgs[aiMsgs.length - 1].remove();
+    }
+    chatWindow.innerHTML += `<div class="chat-message ai">There was an error connecting to the AI. Please try again.</div>`;
+    chatWindow.scrollTop = chatWindow.scrollHeight;
   }
-}
 
-/* Function to add search functionality */
-function addSearchBar() {
-  // Create search input element
-  const searchInput = document.createElement("input");
-  searchInput.type = "text";
-  searchInput.placeholder = "Search products...";
-  searchInput.id = "productSearch";
+  // Clear the input
+  document.getElementById("userInput").value = "";
+});
 
-  // Add to search bar (before category filter)
-  const searchBar = document.querySelector(".search-bar");
-  searchBar.insertBefore(searchInput, categoryFilter);
+// On page load, restore selected products and update UI if needed
+window.onload = async function () {
+  loadSelectedProducts(); // <-- Load from localStorage
+  const products = await loadProducts();
+  // Optionally, show all or wait for category selection
+  renderSelectedProducts(products);
 
-  // Add search functionality
-  searchInput.addEventListener("input", function () {
-    const searchTerm = this.value.toLowerCase();
-    const categoryValue = categoryFilter.value;
-
-    let filtered = productsData;
-
-    // Apply category filter first if selected
-    if (categoryValue) {
-      filtered = filtered.filter(
-        (product) => product.category === categoryValue
-      );
-    }
-
-    // Apply search filter if there's a search term
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (product) =>
-          product.name.toLowerCase().includes(searchTerm) ||
-          product.description.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    // Display filtered products
-    displayProducts(filtered);
-  });
-
-  console.log("🔍 Search functionality added");
-}
-
-// Make functions available globally for onclick handlers in HTML
-window.removeProduct = removeProduct;
-window.toggleDescription = toggleDescription;
-
-console.log("🎉 Script loaded successfully!");
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (product) =>
-          product.name.toLowerCase().includes(searchTerm) ||
-          product.description.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    // Display filtered products
-    displayProducts(filtered);
-  });
-
-  console.log("🔍 Search functionality added");
-}
-
-// Make functions available globally for onclick handlers in HTML
-window.removeProduct = removeProduct;
-window.toggleDescription = toggleDescription;
-
-console.log("🎉 Script loaded successfully!");
+  // If a category is already selected, show products and keep selections
+  if (categoryFilter.value) {
+    const filteredProducts = products.filter(
+      (product) => product.category === categoryFilter.value
+    );
+    displayProducts(filteredProducts);
+    renderSelectedProducts(filteredProducts);
+  }
+};
